@@ -134,6 +134,10 @@ The build publishes two separate programs:
 - `rayv8.exe` is the developer CLI.
 - `rayv8_stub.exe` is the runtime-only game host used by the packager. It contains no CLI commands.
 
+`rayv8.exe` is linked as a console application for developer diagnostics.
+`rayv8_stub.exe` uses the Windows GUI subsystem with `mainCRTStartup`, so games
+produced from the stub launch without a terminal window.
+
 Create, run, and package projects with:
 
 ```powershell

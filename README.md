@@ -109,6 +109,10 @@ The available packaging modes are:
 - `--sidecar` produces an executable and a separate `.game.zip` archive.
 - `--loose` produces an executable beside editable game files.
 
+Packaged game executables use the Windows GUI subsystem and do not open a
+terminal window. The developer `rayv8.exe` keeps its console so run, build, and
+hot-reload diagnostics remain visible.
+
 Run `.\rayv8.exe --help` to display the command summary.
 
 ## Project layout

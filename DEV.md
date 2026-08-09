@@ -20,9 +20,10 @@ Edit `MyGame\game\main.js` while it runs. Build a self-contained game executable
 
 The release archive includes IntelliSense declarations under `types/` and all applicable third-party license texts under `licenses/`.
 
-The bundled permissive licenses allow commercial and closed-source games. A
-distributed game should include the release's `licenses/` directory, or
-reproduce the applicable notices in its installer, documentation, or other
+The bundled permissive licenses allow commercial and closed-source games.
+`rayv8 build` automatically copies the toolkit's `licenses/` directory beside
+every generated game executable. Distributions should keep that directory or
+reproduce the applicable notices in their installer, documentation, or other
 accompanying materials.
 
 ## Architecture

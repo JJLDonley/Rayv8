@@ -61,7 +61,8 @@ RayV8 executables include third-party open-source software. The applicable
 license texts are distributed in the `licenses/` directory. They must remain
 with redistributed copies of the toolkit where their terms require it.
 
-These permissive licenses allow commercial and closed-source games. When
-distributing a game executable built with RayV8, include the `licenses/`
-directory with the game, or reproduce the applicable notices in its installer,
-documentation, or other accompanying materials.
+These permissive licenses allow commercial and closed-source games. `rayv8
+build` automatically copies the `licenses/` directory beside every generated
+game executable. Keep that directory with redistributed games, or reproduce
+the applicable notices in their installer, documentation, or other
+accompanying materials.

@@ -1,0 +1,7 @@
+/build/
+/.deps/
+/.cache/
+DEV.md
+*.user
+*.pdb
+*.ilk

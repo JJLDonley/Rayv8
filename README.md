@@ -3,6 +3,9 @@
 RayV8 is a Windows x64 game-development toolkit that runs JavaScript on V8
 and exposes raylib for graphics, input, audio, and related game APIs.
 
+See the [RayV8 Game Toolkit Handbook](document.md) for the complete player-facing
+API guide, examples, project configuration, and troubleshooting.
+
 ## Quick start
 
 Extract the entire archive, open PowerShell in the extracted directory, and

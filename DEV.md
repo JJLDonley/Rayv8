@@ -32,6 +32,7 @@ The code is split by reason to change:
 
 - `V8Platform` owns the process-wide V8 platform lifecycle.
 - `JsRuntime` owns one isolate and transactional script-context replacement.
+- `ResourceManager` transactionally owns keyed textures and sounds.
 - `ScriptWatcher` only detects source changes.
 - `RegisterRaylib` is the JavaScript-to-raylib boundary.
 - `Engine` coordinates those pieces and owns the frame lifecycle.
@@ -40,7 +41,33 @@ All owning C++ types are non-copyable, V8 scopes stay local, filesystem failures
 
 ## Current API
 
-Game scripts define optional global `init()`, `update()`, `draw()`, and `shutdown()` functions. The engine owns the frame loop and drawing boundaries; raylib functions otherwise keep their original names and argument order. Struct values use JavaScript objects, for example `{ r: 255, g: 0, b: 0, a: 255 }` for `Color`.
+New game scripts define `tick(args)` and may define `boot(args)`. The engine
+creates a default 1280x720 window when a tick-style game does not create one in
+`init()`. Legacy `init()`, `update()`, `draw()`, and `shutdown()` scripts remain
+supported.
+
+The initial lifecycle is `configure(args)` -> `init(args)` -> automatic window
+creation if needed -> `boot(args)`. `configure()` is startup-only and is not
+called for hot reloads, making it the correct place for `SetConfigFlags`.
+Reloads transactionally run only `boot(args)`. Existing-window changes belong
+in normal runtime code through `SetWindowState` and `ClearWindowState`.
+
+`args.state` is serialized from the active context and parsed into a candidate
+context before reload, so it must remain JSON-like. `args.inputs` is rebuilt
+from raylib each frame. `args.outputs` contains fresh sprite, solid, and label
+command arrays consumed by the native renderer. Sounds are persistent handles
+with playback and parameter-control methods, separate from renderer output.
+
+`boot(args)` declares keyed textures and sounds through `args.resources`.
+Declarations form a transaction: unchanged key/path pairs reuse native assets,
+changed paths replace them, absent keys are unloaded after a successful boot,
+and a thrown boot rolls back candidate assets without disturbing the active
+context. An absent `boot()` retains existing resources; use an empty
+`boot(args) {}` to remove all declarations.
+
+Raylib functions otherwise keep their original names and argument order. Struct
+values use JavaScript objects, for example `{ r: 255, g: 0, b: 0, a: 255 }` for
+`Color`.
 
 Bindings are generated from raylib's `raylib_api.json`: 613 functions, 35 structs, 21 grouped enums, and numeric/string defines from the current raylib master checkout. Callback and variadic functions are registered but currently throw an adapter-required error rather than entering V8 unsafely from native threads.
 
@@ -137,13 +164,13 @@ files. Packaged archives retain `game/`, `types/`, and `project.json`, and the
 runtime stub reads the manifest to locate the configured entry.
 
 Save the configured entry script while `rayv8 run` is active. A successfully
-compiled edit replaces the JS context; a syntax/runtime error is printed and the
-previous context keeps running.
+compiled and booted edit replaces the JS context. A syntax error or thrown
+`boot()` is printed and the previous context, state, and resources keep running.
 
 ## Next useful layers
 
 - Generate the complete raylib binding from `raylib_api.json`.
-- Add texture, sound, camera, shader, and struct wrappers with explicit ownership.
-- Preserve selected JS state across reloads.
+- Extend managed resources to music, fonts, shaders, models, and render targets.
+- Expand normalized input beyond the initial keyboard and mouse snapshot.
 - Add a V8-independent C ABI for native plugins and hot-reload copied DLLs.
 - Add debugger/inspector support.

@@ -15,9 +15,11 @@ the raylib API as JavaScript globals.
 - [Lifecycle](#lifecycle)
 - [RayV8 frame API](#rayv8-frame-api)
   - [State](#state)
-  - [Input snapshot](#input-snapshot)
-  - [Full input API](#full-input-api)
-  - [Output queues](#output-queues)
+  - [Frame and timing](#frame-and-timing)
+  - [Keyboard](#keyboard)
+  - [Mouse](#mouse)
+  - [Controllers](#controllers)
+  - [Drawing fields](#drawing-fields)
   - [Managed resources](#managed-resources)
 - [Direct raylib API](#direct-raylib-api)
 - [Project configuration](#project-configuration)
@@ -42,15 +44,16 @@ RayV8 does not require Node.js, npm, a browser, or a web server.
 
 ```js
 /** @param {RayV8Args} args */
-function tick({ state, inputs, outputs }) {
+function tick(args) {
+  const { state, keyboard, dt, solids } = args;
   state.player ??= { x: 400, y: 225 };
-  const speed = 260 * inputs.deltaTime;
+  const speed = 260 * dt;
 
-  if (inputs.keyboard.left) state.player.x -= speed;
-  if (inputs.keyboard.right) state.player.x += speed;
+  if (keyboard.keyDown("LEFT") || keyboard.keyDown("A")) state.player.x -= speed;
+  if (keyboard.keyDown("RIGHT") || keyboard.keyDown("D")) state.player.x += speed;
 
-  outputs.backgroundColor = BLACK;
-  outputs.solids.push({
+  args.background = BLACK;
+  solids.push({
     shape: "circle",
     x: state.player.x,
     y: state.player.y,
@@ -64,16 +67,14 @@ function tick({ state, inputs, outputs }) {
 
 RayV8 deliberately provides two complementary layers:
 
-1. **The RayV8 frame API** supplies reload-safe state, a small convenience
-   input snapshot, output queues, and managed texture/sound resources.
+1. **The RayV8 frame API** supplies flat access to reload-safe state, timing,
+   drawing queues, managed resources, sound operations, and structured input.
 2. **The direct raylib API** supplies the complete keyboard, mouse, gamepad,
    touch, gesture, drawing, image, texture, text, 2D, 3D, audio, file, and
    window surface.
 
-The convenience snapshot is not the complete input API. For example,
-`inputs.keyboard.left` is a shortcut for a common control; any other key is
-available through `IsKeyDown(KeyboardKey.LEFT_SHIFT)` and the other members.
-The exhaustive `KeyboardKey`,
+The structured input layer covers every raylib keyboard key, mouse button,
+gamepad button, and gamepad axis by its enum member name. The exhaustive `KeyboardKey`,
 `MouseButton`, `GamepadButton`, `GamepadAxis`, and `Gesture` tables appear in
 [Enums](#enums), and all related calls appear in
 [Functions by category](#functions-by-category).
@@ -97,7 +98,7 @@ pre-window flags -> window creation -> init callback -> tick each frame -> autom
 init(
   { width: 960, height: 540, title: "My Game" },
   (args) => {
-    // The window exists here. Declare args.resources and perform setup.
+    // The window exists here. Initialize assets with args.resource.
   },
   [ConfigFlags.VSYNC_HINT, ConfigFlags.WINDOW_RESIZABLE]
 );
@@ -123,9 +124,17 @@ without declaring `init` or `tick`.
 ```ts
 interface RayV8Args {
   state: Record<string, any>;
-  inputs: RayV8Inputs;
-  outputs: RayV8Outputs;
-  resources: RayV8Resources;
+  frame: bigint;
+  dt: number;
+  solids: RayV8Solid[];
+  sprites: RayV8Sprite[];
+  labels: RayV8Label[];
+  background: Color;
+  resource: RayV8Resource;
+  sound: RayV8SoundController;
+  keyboard: RayV8Keyboard;
+  mouse: RayV8Mouse;
+  controller: RayV8Controller[];
 }
 ```
 
@@ -146,122 +155,99 @@ State must be JSON-like: objects, arrays, strings, numbers, booleans, and
 textures, or sounds in state. Store managed handles in script-level variables
 assigned by the `init` callback.
 
-### Input snapshot
+### Frame and timing
 
-`args.inputs` is a convenience snapshot created at the start of each frame.
-It contains exactly these fields:
-
-| Field | Type | Semantics | Direct raylib equivalent |
-|---|---|---|---|
-| `frame` | `bigint` | Increasing frame counter | No exact equivalent |
-| `deltaTime` | `number` | Seconds since the prior frame | `GetFrameTime()` |
-| `keyboard.left` | `boolean` | Left arrow or A held | `IsKeyDown(KeyboardKey.LEFT) || IsKeyDown(KeyboardKey.A)` |
-| `keyboard.right` | `boolean` | Right arrow or D held | `IsKeyDown(KeyboardKey.RIGHT) || IsKeyDown(KeyboardKey.D)` |
-| `keyboard.up` | `boolean` | Up arrow or W held | `IsKeyDown(KeyboardKey.UP) || IsKeyDown(KeyboardKey.W)` |
-| `keyboard.down` | `boolean` | Down arrow or S held | `IsKeyDown(KeyboardKey.DOWN) || IsKeyDown(KeyboardKey.S)` |
-| `keyboard.space` | `boolean` | Space held | `IsKeyDown(KeyboardKey.SPACE)` |
-| `keyboard.spacePressed` | `boolean` | Space changed to down this frame | `IsKeyPressed(KeyboardKey.SPACE)` |
-| `mouse.x` | `number` | Mouse x in window coordinates | `GetMouseX()` |
-| `mouse.y` | `number` | Mouse y in window coordinates | `GetMouseY()` |
-| `mouse.left` | `boolean` | Left button held | `IsMouseButtonDown(MouseButton.LEFT)` |
-| `mouse.leftPressed` | `boolean` | Left button changed to down this frame | `IsMouseButtonPressed(MouseButton.LEFT)` |
-
-Held fields are true every frame while held. Pressed fields are true only on
-the up-to-down transition. Multiply continuous movement by `deltaTime`:
+`args.frame` is an increasing `bigint` frame counter. `args.dt` is the number
+of seconds since the previous frame. Multiply continuous movement by `dt` so
+it remains stable at different frame rates:
 
 ```js
-if (inputs.keyboard.right) state.x += 300 * inputs.deltaTime;
+if (args.keyboard.keyDown("RIGHT")) state.x += 300 * args.dt;
 ```
 
-### Full input API
+### Keyboard
 
-Use raylib globals for every option not in the snapshot.
-
-#### Any keyboard key
+Every [KeyboardKey](#keyboardkey) member is accepted by name:
 
 ```js
-if (IsKeyPressed(KeyboardKey.ENTER)) state.started = true;
-if (IsKeyDown(KeyboardKey.LEFT_SHIFT)) state.speed = 500;
-if (IsKeyReleased(KeyboardKey.ESCAPE)) state.menu = true;
+if (args.keyboard.keyPressed("ENTER")) state.started = true;
+if (args.keyboard.keyDown("LEFT_SHIFT")) state.speed = 500;
+if (args.keyboard.keyReleased("ESCAPE")) state.menu = true;
+if (args.keyboard.keyUp("SPACE")) state.canJump = true;
+```
 
-let key;
-while ((key = GetKeyPressed()) !== 0) {
-  // Consume keys pressed this frame.
+| Method | Meaning |
+|---|---|
+| `keyPressed(key)` | Key changed from up to down this frame |
+| `keyPressedRepeat(key)` | OS key-repeat event occurred |
+| `keyDown(key)` | Key is currently held |
+| `keyReleased(key)` | Key changed from down to up this frame |
+| `keyUp(key)` | Key is currently not held |
+| `pressed()` | Consume and return the next pressed key code, or `0` |
+| `characterPressed()` | Consume and return the next typed Unicode codepoint, or `0` |
+| `keyName(key)` | Return the platform name for a key |
+
+String names are checked. An unknown member such as `"NOT_A_KEY"` throws a
+clear range error. Numeric raylib key values are also accepted for advanced use.
+
+### Mouse
+
+`args.mouse` contains `x`, `y`, a `delta` vector, and a two-axis `wheel`
+vector. Every [MouseButton](#mousebutton) member is supported:
+
+```js
+if (args.mouse.buttonPressed("LEFT")) {
+  state.target = { x: args.mouse.x, y: args.mouse.y };
 }
-
-let codepoint;
-while ((codepoint = GetCharPressed()) !== 0) {
-  state.typed += String.fromCodePoint(codepoint);
-}
+if (args.mouse.buttonDown("RIGHT")) { /* held */ }
+if (args.mouse.buttonReleased("MIDDLE")) { /* released this frame */ }
 ```
 
-Keyboard queries are `IsKeyPressed`, `IsKeyPressedRepeat`, `IsKeyDown`,
-`IsKeyReleased`, `IsKeyUp`, `GetKeyPressed`, `GetCharPressed`, `GetKeyName`,
-and `SetExitKey`. See [KeyboardKey](#keyboardkey) for all 110 key constants.
+The button methods are `buttonPressed`, `buttonDown`, `buttonReleased`, and
+`buttonUp`. Direct raylib calls remain available for cursor shape, position,
+offset, and scale.
 
-#### Every mouse button and mouse feature
+### Controllers
 
-```js
-const mouse = GetMousePosition();
-const movement = GetMouseDelta();
-const wheel = GetMouseWheelMoveV();
-
-if (IsMouseButtonPressed(MouseButton.RIGHT)) { /* ... */ }
-if (IsMouseButtonDown(MouseButton.MIDDLE)) { /* ... */ }
-
-SetMouseCursor(MouseCursor.CROSSHAIR);
-```
-
-The API includes pressed/down/released/up queries for all seven mouse buttons,
-position, delta, wheel, cursor shape, position control, offset, and scale. See
-[MouseButton](#mousebutton) and [MouseCursor](#mousecursor).
-
-#### Gamepads
+`args.controller` is a dense array of currently connected gamepads. Each item
+contains its raylib `index`, `name`, `axisCount`, button methods, axis access,
+and vibration:
 
 ```js
-if (IsGamepadAvailable(0)) {
-  if (IsGamepadButtonPressed(0, GamepadButton.RIGHT_FACE_DOWN)) {
-    state.jump = true;
-  }
-  const x = GetGamepadAxisMovement(0, GamepadAxis.LEFT_X);
-  const y = GetGamepadAxisMovement(0, GamepadAxis.LEFT_Y);
-  state.player.x += x * 300 * GetFrameTime();
-  state.player.y += y * 300 * GetFrameTime();
+for (const gamepad of args.controller) {
+  if (gamepad.buttonPressed("RIGHT_FACE_DOWN")) state.jump = true;
+  const x = gamepad.axis("LEFT_X");
+  const y = gamepad.axis("LEFT_Y");
+  state.player.x += x * 300 * args.dt;
+  state.player.y += y * 300 * args.dt;
+  // gamepad.vibrate(0.5, 0.5, 0.1);
 }
 ```
 
-Gamepads support availability/name, pressed/down/released/up button states,
-axis count and movement, mappings, and vibration. See
-[GamepadButton](#gamepadbutton) and [GamepadAxis](#gamepadaxis).
+Button names come from [GamepadButton](#gamepadbutton); axis names come from
+[GamepadAxis](#gamepadaxis). Button methods follow the same pressed, down,
+released, and up semantics as the mouse.
 
-#### Touch and gestures
+Touch and gestures remain available through the direct raylib API.
 
-Touch calls expose point count, positions, and IDs. Gesture calls cover tap,
-double-tap, hold, drag, swipe, and pinch:
-
-```js
-SetGesturesEnabled(Gesture.TAP | Gesture.SWIPE_RIGHT);
-if (IsGestureDetected(Gesture.TAP)) {
-  const point = GetTouchPosition(0);
-}
-```
-
-See [Gesture](#gesture) and the complete Input functions table.
-
-### Output queues
+### Drawing fields
 
 RayV8 creates fresh `sprites`, `solids`, and `labels` arrays before every
 `tick`. Re-add everything that should appear that frame. Rendering order is
 background -> sprites -> solids -> labels; insertion order is preserved within
 each queue.
 
-#### `backgroundColor`
+#### `background`
 
 ```ts
-backgroundColor?: Color
+background: Color
 ```
 
-The clear color for this frame. It defaults to `BLACK` when omitted.
+Assign the clear color directly. It defaults to `BLACK` each frame:
+
+```js
+args.background = { r: 18, g: 24, b: 38, a: 255 };
+```
 
 #### `sprites`
 
@@ -321,9 +307,11 @@ managed across hot reloads:
 let hero;
 let jump;
 
-init({}, ({ resources }) => {
-  hero = resources.texture("hero", "assets/hero.png");
-  jump = resources.sound("jump", "assets/jump.wav");
+init({}, ({ resource }) => {
+  hero = resource.texture("assets/hero.png");
+  jump = resource.sound("assets/jump.wav");
+  const story = resource.file("assets/story.txt");
+  const levels = resource.data("assets/levels.json");
 });
 ```
 
@@ -332,28 +320,30 @@ Paths are relative to the entry script. If the entry is `game/main.js`,
 
 | API | Returns | Meaning |
 |---|---|---|
-| `resources.texture(key, path)` | `RayV8Texture` | Load or reuse a texture |
-| `resources.sound(key, path)` | `RayV8Sound` | Load or reuse a sound |
+| `resource.texture(path)` | `RayV8Texture` | Initialize or reuse a texture |
+| `resource.sound(path)` | `RayV8Sound` | Initialize or reuse an opaque sound handle |
+| `resource.file(path)` | `string` | Load a UTF-8 text file |
+| `resource.data(path)` | `unknown` | Load and parse a JSON file |
 
-Keys must be non-empty. Repeating the same key and normalized path reuses the
-resource. Changing its path replaces it. Omitting a prior key from the next
-successful initialization unloads it. Resources can only be declared during
-the `init` callback.
+Paths identify managed native assets. Repeating the same normalized path
+reuses the texture or sound across hot reloads. Native assets omitted from the
+next successful initialization are unloaded. Resources can only be initialized
+inside the `init` callback.
 If loading fails, the transaction rolls back and the last working context and
 resources continue.
 
-`RayV8Sound` has these methods:
+Sound handles contain identity only. All behavior belongs to `args.sound`:
 
 | Method | Meaning |
 |---|---|
-| `play({ volume?, pitch?, pan? }?)` | Apply options and start playback |
-| `stop()` | Stop and rewind |
-| `pause()` | Pause |
-| `resume()` | Resume |
-| `isPlaying()` | Return current playback state |
-| `setVolume(value)` | Set volume |
-| `setPitch(value)` | Set pitch |
-| `setPan(value)` | Set stereo pan |
+| `sound.play(handle, { volume?, pitch?, pan? }?)` | Apply options and start playback |
+| `sound.stop(handle)` | Stop and rewind |
+| `sound.pause(handle)` | Pause |
+| `sound.resume(handle)` | Resume |
+| `sound.isPlaying(handle)` | Return current playback state |
+| `sound.setVolume(handle, value)` | Set volume |
+| `sound.setPitch(handle, value)` | Set pitch |
+| `sound.setPan(handle, value)` | Set stereo pan |
 
 Sound calls act immediately and are not output-queue entries.
 
@@ -383,8 +373,8 @@ contract. Functions taking variadic arguments or native callback types are
 registered but intentionally throw because they require a native adapter;
 they are marked **Not callable** in the generated function tables.
 
-RayV8 calls `tick` inside the drawing phase. Games may queue drawing through
-`outputs`, call direct drawing functions, or use paired modes such as
+RayV8 calls `tick` inside the drawing phase. Games may use the `sprites`,
+`solids`, and `labels` arrays, call direct drawing functions, or use paired modes such as
 `BeginMode2D`/`EndMode2D` directly inside `tick`.
 
 ## Project configuration
@@ -439,35 +429,35 @@ applicable notices in accompanying materials.
 ### Movement with any WASD or arrow key
 
 ```js
-function tick({ state, inputs, outputs }) {
+function tick(args) {
+  const { state, keyboard, dt, solids } = args;
   state.player ??= { x: 400, y: 225 };
-  const dt = inputs.deltaTime;
-  const speed = IsKeyDown(KeyboardKey.LEFT_SHIFT) ? 480 : 240;
+  const speed = keyboard.keyDown("LEFT_SHIFT") ? 480 : 240;
 
-  const left = inputs.keyboard.left || IsKeyDown(KeyboardKey.A);
-  const right = inputs.keyboard.right || IsKeyDown(KeyboardKey.D);
-  const up = inputs.keyboard.up || IsKeyDown(KeyboardKey.W);
-  const down = inputs.keyboard.down || IsKeyDown(KeyboardKey.S);
+  const left = keyboard.keyDown("LEFT") || keyboard.keyDown("A");
+  const right = keyboard.keyDown("RIGHT") || keyboard.keyDown("D");
+  const up = keyboard.keyDown("UP") || keyboard.keyDown("W");
+  const down = keyboard.keyDown("DOWN") || keyboard.keyDown("S");
 
   if (left) state.player.x -= speed * dt;
   if (right) state.player.x += speed * dt;
   if (up) state.player.y -= speed * dt;
   if (down) state.player.y += speed * dt;
 
-  outputs.backgroundColor = BLACK;
-  outputs.solids.push({ shape: "circle", ...state.player, radius: 20, color: GOLD });
+  args.background = BLACK;
+  solids.push({ shape: "circle", ...state.player, radius: 20, color: GOLD });
 }
 ```
 
 ### Click-to-move
 
 ```js
-function tick({ state, inputs, outputs }) {
+function tick({ state, mouse, solids }) {
   state.target ??= { x: 100, y: 100 };
-  if (inputs.mouse.leftPressed) {
-    state.target = { x: inputs.mouse.x, y: inputs.mouse.y };
+  if (mouse.buttonPressed("LEFT")) {
+    state.target = { x: mouse.x, y: mouse.y };
   }
-  outputs.solids.push({ shape: "circle", ...state.target, radius: 12, color: RED });
+  solids.push({ shape: "circle", ...state.target, radius: 12, color: RED });
 }
 ```
 
@@ -477,15 +467,15 @@ function tick({ state, inputs, outputs }) {
 let player;
 let pickup;
 
-init({}, ({ resources }) => {
-  player = resources.texture("player", "assets/player.png");
-  pickup = resources.sound("pickup", "assets/pickup.wav");
+init({}, ({ resource }) => {
+  player = resource.texture("assets/player.png");
+  pickup = resource.sound("assets/pickup.wav");
 });
 
-function tick({ state, inputs, outputs }) {
+function tick({ state, keyboard, sprites, sound }) {
   state.position ??= { x: 100, y: 100 };
-  if (inputs.keyboard.spacePressed) pickup.play({ volume: 0.8 });
-  outputs.sprites.push({ texture: player, ...state.position });
+  if (keyboard.keyPressed("SPACE")) sound.play(pickup, { volume: 0.8 });
+  sprites.push({ texture: player, ...state.position });
 }
 ```
 

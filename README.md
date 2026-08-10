@@ -30,23 +30,23 @@ RayV8 provides one initializer and one frame function:
 ```js
 init(
   { width: 1280, height: 720, title: "My Game" },
-  (args) => {
-    // The window exists here. Initialize state and managed resources.
+  ({ resource }) => {
+    // The window exists here. Initialize managed assets with resource.
   },
   [ConfigFlags.VSYNC_HINT]
 );
 
 /** @param {RayV8Args} args */
 function tick(args) {
-  const { state, inputs, outputs } = args;
+  const { state, keyboard, dt, solids } = args;
   state.player ??= { x: 400, y: 225 };
 
-  const speed = 240 * inputs.deltaTime;
-  if (inputs.keyboard.left) state.player.x -= speed;
-  if (inputs.keyboard.right) state.player.x += speed;
+  const speed = 240 * dt;
+  if (keyboard.keyDown("LEFT") || keyboard.keyDown("A")) state.player.x -= speed;
+  if (keyboard.keyDown("RIGHT") || keyboard.keyDown("D")) state.player.x += speed;
 
-  outputs.backgroundColor = BLACK;
-  outputs.solids.push({
+  args.background = BLACK;
+  solids.push({
     shape: "circle",
     x: state.player.x,
     y: state.player.y,
@@ -58,7 +58,10 @@ function tick(args) {
 
 `init({}, callback)` uses a 1280 by 720 window titled `RayV8` when window
 details are omitted. Its optional flag array is applied before window creation.
-The callback receives the same `args` API used by `tick`.
+The callback receives `state`, `resource`, and `sound` for initialization.
+Each frame, `tick` receives the flat RayV8 API: `state`, `frame`, `dt`,
+`solids`, `sprites`, `labels`, `background`, `resource`, `sound`, `keyboard`,
+`mouse`, and the connected `controller` array.
 
 RayV8 also supports raw top-level raylib scripts with no required lifecycle
 functions. Games may use direct raylib calls, RayV8's state and output helpers,

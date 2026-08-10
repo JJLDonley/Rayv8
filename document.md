@@ -253,7 +253,7 @@ args.background = { r: 18, g: 24, b: 38, a: 255 };
 
 ```ts
 interface RayV8Sprite {
-  texture: RayV8Texture;
+  texture: string;      // registered resource key
   x: number;
   y: number;
   rotation?: number; // default 0 degrees
@@ -262,9 +262,9 @@ interface RayV8Sprite {
 }
 ```
 
-`x` and `y` locate the texture's top-left drawing origin. Rotation is in
-degrees. The managed texture includes `id`, `width`, `height`, `mipmaps`,
-`format`, and its read-only RayV8 `key`.
+`texture` is the key registered with `resource.texture(key, path)`. RayV8
+resolves and owns the native texture internally. `x` and `y` locate its
+top-left drawing origin. Rotation is in degrees.
 
 #### `solids`
 
@@ -304,12 +304,9 @@ Textures and sounds declared in the `init` callback are transactionally
 managed across hot reloads:
 
 ```js
-let hero;
-let jump;
-
 init({}, ({ resource }) => {
-  hero = resource.texture("assets/hero.png");
-  jump = resource.sound("assets/jump.wav");
+  resource.texture("hero", "assets/hero.png");
+  resource.sound("jump", "assets/jump.wav");
   const story = resource.file("assets/story.txt");
   const levels = resource.data("assets/levels.json");
 });
@@ -320,30 +317,31 @@ Paths are relative to the entry script. If the entry is `game/main.js`,
 
 | API | Returns | Meaning |
 |---|---|---|
-| `resource.texture(path)` | `RayV8Texture` | Initialize or reuse a texture |
-| `resource.sound(path)` | `RayV8Sound` | Initialize or reuse an opaque sound handle |
+| `resource.texture(key, path)` | `void` | Register, initialize, or reuse a texture |
+| `resource.sound(key, path)` | `void` | Register, initialize, or reuse a sound |
 | `resource.file(path)` | `string` | Load a UTF-8 text file |
 | `resource.data(path)` | `unknown` | Load and parse a JSON file |
 
-Paths identify managed native assets. Repeating the same normalized path
-reuses the texture or sound across hot reloads. Native assets omitted from the
-next successful initialization are unloaded. Resources can only be initialized
-inside the `init` callback.
+Keys identify managed native assets in game code. Repeating the same key and
+normalized path reuses the texture or sound across hot reloads. Changing a
+key's path replaces its asset. Keys omitted from the next successful
+initialization are unloaded. Resources can only be initialized inside the
+`init` callback.
 If loading fails, the transaction rolls back and the last working context and
 resources continue.
 
-Sound handles contain identity only. All behavior belongs to `args.sound`:
+All sound behavior belongs to `args.sound` and addresses the registered key:
 
 | Method | Meaning |
 |---|---|
-| `sound.play(handle, { volume?, pitch?, pan? }?)` | Apply options and start playback |
-| `sound.stop(handle)` | Stop and rewind |
-| `sound.pause(handle)` | Pause |
-| `sound.resume(handle)` | Resume |
-| `sound.isPlaying(handle)` | Return current playback state |
-| `sound.setVolume(handle, value)` | Set volume |
-| `sound.setPitch(handle, value)` | Set pitch |
-| `sound.setPan(handle, value)` | Set stereo pan |
+| `sound.play(key, { volume?, pitch?, pan? }?)` | Apply options and start playback |
+| `sound.stop(key)` | Stop and rewind |
+| `sound.pause(key)` | Pause |
+| `sound.resume(key)` | Resume |
+| `sound.isPlaying(key)` | Return current playback state |
+| `sound.setVolume(key, value)` | Set volume |
+| `sound.setPitch(key, value)` | Set pitch |
+| `sound.setPan(key, value)` | Set stereo pan |
 
 Sound calls act immediately and are not output-queue entries.
 
@@ -464,18 +462,15 @@ function tick({ state, mouse, solids }) {
 ### Hot-reload-safe asset use
 
 ```js
-let player;
-let pickup;
-
 init({}, ({ resource }) => {
-  player = resource.texture("assets/player.png");
-  pickup = resource.sound("assets/pickup.wav");
+  resource.texture("player", "assets/player.png");
+  resource.sound("pickup", "assets/pickup.wav");
 });
 
 function tick({ state, keyboard, sprites, sound }) {
   state.position ??= { x: 100, y: 100 };
-  if (keyboard.keyPressed("SPACE")) sound.play(pickup, { volume: 0.8 });
-  sprites.push({ texture: player, ...state.position });
+  if (keyboard.keyPressed("SPACE")) sound.play("pickup", { volume: 0.8 });
+  sprites.push({ texture: "player", ...state.position });
 }
 ```
 

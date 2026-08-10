@@ -31,7 +31,8 @@ RayV8 provides one initializer and one frame function:
 init(
   { width: 1280, height: 720, title: "My Game" },
   ({ resource }) => {
-    // The window exists here. Initialize managed assets with resource.
+    resource.texture("player", "assets/player.png");
+    resource.sound("jump", "assets/jump.wav");
   },
   [ConfigFlags.VSYNC_HINT]
 );
@@ -62,6 +63,10 @@ The callback receives `state`, `resource`, and `sound` for initialization.
 Each frame, `tick` receives the flat RayV8 API: `state`, `frame`, `dt`,
 `solids`, `sprites`, `labels`, `background`, `resource`, `sound`, `keyboard`,
 `mouse`, and the connected `controller` array.
+
+Managed assets live in RayV8's keyed resource inventory. Sprites reference a
+texture key such as `"player"`, while `sound.play("jump")` controls a sound by
+key. RayV8 retains, replaces, and unloads the underlying native assets.
 
 RayV8 also supports raw top-level raylib scripts with no required lifecycle
 functions. Games may use direct raylib calls, RayV8's state and output helpers,

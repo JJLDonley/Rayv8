@@ -1,14 +1,20 @@
 # RayV8
 
-RayV8 is a Windows x64 game toolkit for building games in JavaScript with V8
-and raylib. It combines a small, focused game lifecycle with direct access to
-raylib's graphics, input, audio, window, image, text, 2D, and 3D APIs.
+RayV8 v0.1.2 is a Windows x64 game toolkit for building games in JavaScript
+with V8. It combines a typed callback-based game loop, working console output,
+managed resources, and generated access to the complete raylib, raymath, and
+rlgl API surfaces.
 
 ## Documentation
 
 Read the [RayV8 Game Toolkit API Handbook](document.md) for installation,
 project structure, the complete `init` and `tick` API, managed resources,
 input, drawing, packaging, examples, and the full raylib reference.
+
+Editor declarations are split by responsibility: `types/rayv8.d.ts` documents
+the lifecycle, `args`, input, managed resources, and drawing queues, while
+`types/raylib.d.ts` contains the generated raylib/raymath/rlgl surface. Generated
+projects load both automatically through `jsconfig.json`.
 
 ## Quick start
 
@@ -19,6 +25,15 @@ extracted directory, then generate and run a project:
 .\rayv8.exe generate MyGame
 .\rayv8.exe run MyGame
 ```
+
+Refresh the toolkit declarations in an existing project after upgrading RayV8:
+
+```powershell
+.\rayv8.exe regen MyGame
+```
+
+`regen` only replaces the toolkit-owned files in `types/`; game code, assets,
+`project.json`, and `jsconfig.json` are left unchanged.
 
 Edit `MyGame\game\main.js` while it runs. RayV8 reloads successful changes
 automatically and keeps the last working game active when an edit fails.
@@ -37,8 +52,7 @@ init(
   [ConfigFlags.VSYNC_HINT]
 );
 
-/** @param {RayV8Args} args */
-function tick(args) {
+tick((args) => {
   const { state, keyboard, dt, solids } = args;
   state.player ??= { x: 400, y: 225 };
 
@@ -54,7 +68,7 @@ function tick(args) {
     radius: 24,
     color: SKYBLUE
   });
-}
+});
 ```
 
 `init({}, callback)` uses a 1280 by 720 window titled `RayV8` when window
@@ -69,8 +83,10 @@ texture key such as `"player"`, while `sound.play("jump")` controls a sound by
 key. RayV8 retains, replaces, and unloads the underlying native assets.
 
 RayV8 also supports raw top-level raylib scripts with no required lifecycle
-functions. Games may use direct raylib calls, RayV8's state and output helpers,
-or both.
+functions. Games may combine direct raylib, raymath, and rlgl calls with
+RayV8's state and output helpers. Native pointers cross the API as `bigint`
+addresses; callback and variadic APIs require dedicated adapters before they
+can safely call into JavaScript.
 
 ## Build and distribute
 

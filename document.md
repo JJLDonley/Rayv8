@@ -43,8 +43,7 @@ Edit `MyGame\game\main.js` while it runs. A valid save reloads automatically.
 RayV8 does not require Node.js, npm, a browser, or a web server.
 
 ```js
-/** @param {RayV8Args} args */
-function tick(args) {
+tick((args) => {
   const { state, keyboard, dt, solids } = args;
   state.player ??= { x: 400, y: 225 };
   const speed = 260 * dt;
@@ -60,7 +59,7 @@ function tick(args) {
     radius: 24,
     color: SKYBLUE
   });
-}
+});
 ```
 
 ## The two API layers
@@ -84,7 +83,7 @@ gamepad button, and gamepad axis by its enum member name. The exhaustive `Keyboa
 | Function | Called | Purpose |
 |---|---|---|
 | `init(options, callback, flags?)` | Once at startup | Apply pre-window flags, create the window, then run initialization |
-| `tick(args)` | Every frame | Read input, update state, draw directly, and/or fill output queues |
+| `tick(callback)` | Registers once | Register the typed callback that updates and draws every frame |
 
 Calling `init` always creates a window. Omitted window fields default to 1280
 by 720 with the title `RayV8`. Flags in the optional third array are combined
@@ -104,18 +103,31 @@ init(
 );
 ```
 
-`tick` is declared normally and receives `args` each frame:
+Register a callback with `tick`; `args` is inferred from `RayV8Args` without a
+JSDoc annotation:
 
 ```js
-function tick(args) {
+tick((args) => {
   DrawText("Hello", 24, 24, 32, RAYWHITE);
-}
+});
 ```
 
 RayV8 opens and closes the drawing frame around `tick`, so direct raylib draw
 calls and managed output queues can be used in the same function. Cleanup is
 automatic. A raw top-level raylib script may instead own its window and loop
-without declaring `init` or `tick`.
+without calling `init` or `tick`. The legacy `function tick(args) {}` form is
+still accepted, but JavaScript editors require a JSDoc parameter annotation for
+that independently declared function.
+
+### Console
+
+RayV8 provides `console.log`, `console.info`, `console.warn`, and
+`console.error`. Output is written immediately to the host process streams.
+The formatter supports objects, arrays, functions, and `bigint` values:
+
+```js
+console.log("first frame", args.frame, args);
+```
 
 ## RayV8 frame API
 
@@ -427,7 +439,7 @@ applicable notices in accompanying materials.
 ### Movement with any WASD or arrow key
 
 ```js
-function tick(args) {
+tick((args) => {
   const { state, keyboard, dt, solids } = args;
   state.player ??= { x: 400, y: 225 };
   const speed = keyboard.keyDown("LEFT_SHIFT") ? 480 : 240;
@@ -444,7 +456,7 @@ function tick(args) {
 
   args.background = BLACK;
   solids.push({ shape: "circle", ...state.player, radius: 20, color: GOLD });
-}
+});
 ```
 
 ### Click-to-move
@@ -2099,4 +2111,4 @@ Signatures use the JavaScript types exposed by RayV8. `bigint | null` represents
 
 Inventory totals: **35 structures**, **6 callbacks**, **21 enums**, **56 parsed constants**, and **613 functions**.
 
-For editor completion, keep `types/raylib.d.ts` in the generated project and enable JavaScript checking through its `jsconfig.json`.
+For editor completion, keep both `types/rayv8.d.ts` and `types/raylib.d.ts` in the generated project and enable JavaScript checking through its `jsconfig.json`. The first file documents the lifecycle and frame context; the second contains the generated native API surface.

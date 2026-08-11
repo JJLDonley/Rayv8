@@ -1,6 +1,6 @@
 # RayV8
 
-RayV8 v0.1.2 is a Windows x64 game toolkit for building games in JavaScript
+RayV8 v0.1.3 is an experimental Windows x64 game toolkit for building games in JavaScript
 with V8. It combines a typed callback-based game loop, working console output,
 managed resources, and generated access to the complete raylib, raymath, and
 rlgl API surfaces.
@@ -73,15 +73,23 @@ tick((args) => {
 
 `init({}, callback)` uses a 1280 by 720 window titled `RayV8` when window
 details are omitted. Its optional flag array is applied before window creation.
-The callback receives `state`, `resource`, and `sound` for initialization.
+The callback receives `state`, `resource`, `sound`, and `animator` for initialization.
 Each frame, `tick` receives the flat RayV8 API: `state`, `frame`, `dt`,
-`solids`, `sprites`, `labels`, `background`, `resource`, `sound`, `keyboard`,
+`solids`, `sprites`, `labels`, `background`, `resource`, `sound`, `animator`, `keyboard`,
 `mouse`, and the connected `controller` array.
 
-Managed textures, sounds, models, shaders, fonts, and music live in RayV8's
+Managed textures, sounds, models, shaders, fonts, music, and animations live in RayV8's
 keyed resource inventory. RayV8 retains unchanged native assets across hot
-reloads, rolls back failed replacements, and unloads removed assets. Models,
-shaders, fonts, and music are returned for use with direct raylib calls.
+reloads, rolls back failed replacements, and unloads removed assets. Resource
+declarations return nothing. Retrieve any registered asset uniformly
+with `resource.get(ResourceType.*, key)`; models and animation sets remain independent.
+
+An experimental flat world-space API provides `args.world2D` and
+`args.world3D`. Each world is disabled while its per-frame camera is `null`;
+the existing sprite, solid, and label queues remain screen-space overlays.
+Persistent animated instances are created with `animator.create()`, controlled
+with `animator.play()` and related methods, and submitted using
+`world3D.models.push({ instance: "player", ... })`.
 
 RayV8 also supports raw top-level raylib scripts with no required lifecycle
 functions. Games may combine direct raylib, raymath, and rlgl calls with

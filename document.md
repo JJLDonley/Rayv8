@@ -1,5 +1,8 @@
 # RayV8 Game Toolkit API Handbook
 
+This handbook documents the experimental RayV8 v0.1.3 release. APIs marked
+experimental may change as the animator and world-space systems mature.
+
 This is the complete user-facing reference for the RayV8 toolkit bundled with
 this release. RayV8 runs JavaScript on V8 and exposes a managed game loop plus
 the raylib API as JavaScript globals.
@@ -144,6 +147,7 @@ interface RayV8Args {
   background: Color;
   resource: RayV8Resource;
   sound: RayV8SoundController;
+  animator: RayV8AnimatorController;
   keyboard: RayV8Keyboard;
   mouse: RayV8Mouse;
   controller: RayV8Controller[];
@@ -152,6 +156,73 @@ interface RayV8Args {
 
 It is also exposed as global `args`, although accepting the parameter is
 clearer and works better with editor type checking.
+
+### Experimental world spaces
+
+`world2D` and `world3D` are prototype APIs. Each contains a camera and fresh
+per-frame drawing queues. Both cameras reset to `null` every frame; when a
+camera remains `null`, RayV8 skips that entire world and does not inspect its
+queues. Existing `sprites`, `solids`, and `labels` remain screen-space overlays.
+
+```js
+args.world3D.camera = state.worldCamera;
+args.world3D.models.push({
+  model: "barbarian",
+  position: state.player.position,
+  rotationAxis: { x: 0, y: 1, z: 0 },
+  rotation: state.player.rotation,
+  scale: 1,
+  tint: WHITE
+});
+args.world3D.grids.push({ slices: 20, spacing: 1 });
+
+args.world2D.camera = state.mapCamera;
+args.world2D.sprites.push({ texture: "marker", x: 0, y: 0 });
+
+args.labels.push({ text: "Screen-space HUD", x: 20, y: 20 });
+```
+
+The current render order is `world3D`, then `world2D`, then the existing
+screen-space queues. Because this API is marked experimental, its names and
+queue structure may change based on practical use.
+
+### Animated model instances
+
+Animation playback is persistent simulation state, separate from the fresh
+`world3D` render queue. Declare model and animation resources, create an
+animator instance during `init`, and play clips by name:
+
+```js
+init({}, ({ resource, animator }) => {
+  resource.model("barbarian", characterPath);
+  resource.animations("general", generalAnimationsPath);
+  resource.animations("movement", movementAnimationsPath);
+  animator.create("player", {
+    model: "barbarian",
+    animations: ["general", "movement"]
+  });
+  animator.play("player", "Walking_A", { loop: true });
+});
+
+tick((args) => {
+  if (args.keyboard.keyPressed("E")) {
+    args.animator.play("player", "Running_A", { fade: 0.2 });
+  }
+  args.world3D.camera = args.state.camera;
+  args.world3D.models.push({
+    instance: "player",
+    position: args.state.playerPosition
+  });
+});
+```
+
+The controller supplies `create`, `play`, `pause`, `resume`, `stop`, `seek`,
+`setSpeed`, and `get`. Repeating `play` for the active clip is idempotent unless
+`restart: true` is supplied. If a clip name occurs in multiple configured
+animation collections, select one with `collection`. A queued `{ model: ... }`
+entry is static; a queued `{ instance: ... }` entry resolves its model and pose
+through the animator. RayV8 applies and draws each instance immediately so
+multiple instances can share a model resource while using different poses.
 
 ### State
 
@@ -312,17 +383,20 @@ custom fonts, spacing, rotation, or mixed draw ordering.
 
 ### Managed resources
 
-Textures, sounds, models, shaders, fonts, and music declared in the `init` callback are transactionally
+Textures, sounds, models, shaders, fonts, music, and animations declared in the `init` callback are transactionally
 managed across hot reloads:
 
 ```js
 init({}, ({ resource }) => {
   resource.texture("hero", "assets/hero.png");
   resource.sound("jump", "assets/jump.wav");
-  const hero = resource.model("hero-model", "assets/hero.glb");
-  const lighting = resource.shader("lighting", "shaders/lighting.vs", "shaders/lighting.fs");
-  const ui = resource.font("ui", "assets/ui.ttf");
-  const theme = resource.music("theme", "assets/theme.ogg");
+  resource.model("hero-model", "assets/hero.glb");
+  resource.animations("hero-animations", "assets/hero.glb");
+  resource.shader("lighting", "shaders/lighting.vs", "shaders/lighting.fs");
+  resource.font("ui", "assets/ui.ttf");
+  resource.music("theme", "assets/theme.ogg");
+  const hero = resource.get(ResourceType.MODEL, "hero-model");
+  const animations = resource.get(ResourceType.ANIMATIONS, "hero-animations");
   const story = resource.file("assets/story.txt");
   const levels = resource.data("assets/levels.json");
 });
@@ -335,10 +409,12 @@ Paths are relative to the entry script. If the entry is `game/main.js`,
 |---|---|---|
 | `resource.texture(key, path)` | `void` | Register, initialize, or reuse a texture |
 | `resource.sound(key, path)` | `void` | Register, initialize, or reuse a sound |
-| `resource.model(key, path)` | `Model` | Register or reuse a model and return it for direct raylib calls |
-| `resource.shader(key, vertexPath, fragmentPath)` | `Shader` | Register or reuse a shader; either stage path may be `null` |
-| `resource.font(key, path)` | `Font` | Register or reuse a font and return it |
-| `resource.music(key, path)` | `Music` | Register or reuse a music stream and return it |
+| `resource.model(key, path)` | `void` | Register or reuse a model |
+| `resource.animations(key, path)` | `void` | Register or reuse the animations in a model or animation file |
+| `resource.shader(key, vertexPath, fragmentPath)` | `void` | Register or reuse a shader; either stage path may be `null` |
+| `resource.font(key, path)` | `void` | Register or reuse a font |
+| `resource.music(key, path)` | `void` | Register or reuse a music stream |
+| `resource.get(ResourceType.*, key)` | Native resource or `ModelAnimation[]` | Retrieve a managed texture, sound, model, shader, font, music stream, or animation set |
 | `resource.file(path)` | `string` | Load a UTF-8 text file |
 | `resource.data(path)` | `unknown` | Load and parse a JSON file |
 
@@ -350,7 +426,11 @@ initialization are unloaded. Resources can only be initialized inside the
 If loading fails, the transaction rolls back and the last working context and
 resources continue.
 
-Returned models, shaders, fonts, and music objects belong to RayV8. Use them
+`ResourceType` exposes numeric `TEXTURE`, `SOUND`, `MODEL`, `SHADER`, `FONT`,
+`MUSIC`, and `ANIMATIONS` members. Resources returned by `resource.get` belong
+to RayV8. Models and
+animation sets are independent resources and may use different keys or files.
+Use them
 with direct raylib calls, but do not call their `Unload*` functions. Music
 streams still require `UpdateMusicStream(music)` each frame while playing.
 Meshes owned by a model are unloaded with that model; independently generated

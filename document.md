@@ -415,6 +415,7 @@ Paths are relative to the entry script. If the entry is `game/main.js`,
 | `resource.font(key, path)` | `void` | Register or reuse a font |
 | `resource.music(key, path)` | `void` | Register or reuse a music stream |
 | `resource.get(ResourceType.*, key)` | Native resource or `ModelAnimation[]` | Retrieve a managed texture, sound, model, shader, font, music stream, or animation set |
+| `resource.reload(ResourceType.MODEL, key)` | `boolean` | Reload a managed model from its declared path |
 | `resource.file(path)` | `string` | Load a UTF-8 text file |
 | `resource.data(path)` | `unknown` | Load and parse a JSON file |
 

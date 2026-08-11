@@ -83,6 +83,9 @@ keyed resource inventory. RayV8 retains unchanged native assets across hot
 reloads, rolls back failed replacements, and unloads removed assets. Resource
 declarations return nothing. Retrieve any registered asset uniformly
 with `resource.get(ResourceType.*, key)`; models and animation sets remain independent.
+Managed models can be refreshed in place with
+`resource.reload(ResourceType.MODEL, key)`, allowing editors to rebuild and
+display generated geometry without restarting RayV8.
 
 An experimental flat world-space API provides `args.world2D` and
 `args.world3D`. Each world is disabled while its per-frame camera is `null`;

@@ -78,9 +78,10 @@ Each frame, `tick` receives the flat RayV8 API: `state`, `frame`, `dt`,
 `solids`, `sprites`, `labels`, `background`, `resource`, `sound`, `keyboard`,
 `mouse`, and the connected `controller` array.
 
-Managed assets live in RayV8's keyed resource inventory. Sprites reference a
-texture key such as `"player"`, while `sound.play("jump")` controls a sound by
-key. RayV8 retains, replaces, and unloads the underlying native assets.
+Managed textures, sounds, models, shaders, fonts, and music live in RayV8's
+keyed resource inventory. RayV8 retains unchanged native assets across hot
+reloads, rolls back failed replacements, and unloads removed assets. Models,
+shaders, fonts, and music are returned for use with direct raylib calls.
 
 RayV8 also supports raw top-level raylib scripts with no required lifecycle
 functions. Games may combine direct raylib, raymath, and rlgl calls with

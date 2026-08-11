@@ -312,13 +312,17 @@ custom fonts, spacing, rotation, or mixed draw ordering.
 
 ### Managed resources
 
-Textures and sounds declared in the `init` callback are transactionally
+Textures, sounds, models, shaders, fonts, and music declared in the `init` callback are transactionally
 managed across hot reloads:
 
 ```js
 init({}, ({ resource }) => {
   resource.texture("hero", "assets/hero.png");
   resource.sound("jump", "assets/jump.wav");
+  const hero = resource.model("hero-model", "assets/hero.glb");
+  const lighting = resource.shader("lighting", "shaders/lighting.vs", "shaders/lighting.fs");
+  const ui = resource.font("ui", "assets/ui.ttf");
+  const theme = resource.music("theme", "assets/theme.ogg");
   const story = resource.file("assets/story.txt");
   const levels = resource.data("assets/levels.json");
 });
@@ -331,16 +335,26 @@ Paths are relative to the entry script. If the entry is `game/main.js`,
 |---|---|---|
 | `resource.texture(key, path)` | `void` | Register, initialize, or reuse a texture |
 | `resource.sound(key, path)` | `void` | Register, initialize, or reuse a sound |
+| `resource.model(key, path)` | `Model` | Register or reuse a model and return it for direct raylib calls |
+| `resource.shader(key, vertexPath, fragmentPath)` | `Shader` | Register or reuse a shader; either stage path may be `null` |
+| `resource.font(key, path)` | `Font` | Register or reuse a font and return it |
+| `resource.music(key, path)` | `Music` | Register or reuse a music stream and return it |
 | `resource.file(path)` | `string` | Load a UTF-8 text file |
 | `resource.data(path)` | `unknown` | Load and parse a JSON file |
 
 Keys identify managed native assets in game code. Repeating the same key and
-normalized path reuses the texture or sound across hot reloads. Changing a
+normalized path reuses the native resource across hot reloads. Changing a
 key's path replaces its asset. Keys omitted from the next successful
 initialization are unloaded. Resources can only be initialized inside the
 `init` callback.
 If loading fails, the transaction rolls back and the last working context and
 resources continue.
+
+Returned models, shaders, fonts, and music objects belong to RayV8. Use them
+with direct raylib calls, but do not call their `Unload*` functions. Music
+streams still require `UpdateMusicStream(music)` each frame while playing.
+Meshes owned by a model are unloaded with that model; independently generated
+meshes are not managed by this API to avoid ambiguous or double ownership.
 
 All sound behavior belongs to `args.sound` and addresses the registered key:
 
